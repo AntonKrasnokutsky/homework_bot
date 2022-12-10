@@ -33,23 +33,19 @@ HOMEWORK_VERDICTS = {
 
 
 class EnvironmentNotFound(Exception):
-    """Исключение возникающее при нехватки переменных окружения"""
+    """Исключение возникающее при нехватки переменных окружения."""
 
     pass
 
 
 class AnswerAPIError(Exception):
-    """Исключение возникающее при ошибочных ответах от API"""
+    """Исключение возникающее при ошибочных ответах от API."""
 
     pass
 
 
 def check_tokens():
-    """
-    Проверяет доступность переменных окружения,
-    которые необходимы для работы программы
-    """
-
+    """Проверяет доступность переменных окружения."""
     message = ("Отсутствует обязательная переменная окружения: "
                "'{}' Программа принудительно остановлена.")
     if not PRACTICUM_TOKEN:
@@ -64,8 +60,7 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    """Отправляет сообщение в Telegram чат"""
-
+    """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
@@ -78,8 +73,7 @@ def send_message(bot, message):
 
 
 def get_api_answer(timestamp):
-    """Делает запрос к единственному эндпоинту API-сервиса"""
-
+    """Делает запрос к единственному эндпоинту API-сервиса."""
     payload = {'from_date': timestamp}
     try:
         homework_statuses = requests.get(
@@ -119,8 +113,7 @@ def get_api_answer(timestamp):
 
 
 def check_response(response):
-    """Проверяет ответ API на соответствие документации"""
-
+    """Проверяет ответ API на соответствие документации."""
     keys = ['homeworks', 'current_date']
     if not isinstance(response, dict):
         message = "Неверный формат ответа API."
@@ -139,10 +132,7 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """
-    Извлекает из информации о конкретной домашней работе статус этой работы
-    """
-
+    """Извлекает статус этой домашней работы."""
     if "homework_name" not in homework.keys():
         raise KeyError("В ответе API домашки нет ключа 'homework_name'.")
     if "status" not in homework.keys():
@@ -159,7 +149,6 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-
     check_tokens()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
