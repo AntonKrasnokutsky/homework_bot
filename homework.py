@@ -56,8 +56,8 @@ def send_message(bot, message):
         )
         logging.debug('Сообщение отправлено в чат Telegram')
     except Exception as error:
-        logging.error('Сообщение отправлено в чат Telegram')
-        raise MessageSend(f'Сбой при отправке сообщения: {error}')
+        logging.error(f'Сбой при отправке сообщения: {error}')
+        raise MessageSend('Сообщение не отправлено')
 
 
 def get_api_answer(timestamp):
@@ -98,7 +98,7 @@ def check_response(response):
     if not isinstance(response, dict):
         raise TypeError('Неверный формат ответа API.')
 
-    if 'homeworks' not in response.keys():
+    if 'homeworks' not in response:
         raise AnswerAPIError('Ответ не содержит информации о домашней работе.')
 
     if not isinstance(response['homeworks'], list):
@@ -127,7 +127,7 @@ def main():
         check_tokens()
     except Exception as error:
         logging.critical(error)
-        os._exit(1)
+        raise EnvironmentNotFound(error)
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
@@ -136,6 +136,7 @@ def main():
         try:
             answer = get_api_answer(timestamp)
             check_response(answer)
+            print(answer)
             message = parse_status(answer['homeworks'][0])
             send_message(bot, message)
 
