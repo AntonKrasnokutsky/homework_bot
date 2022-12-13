@@ -7,6 +7,7 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
+from exceptions import AnswerAPIError, EnvironmentNotFound, MessageSend
 load_dotenv()
 
 logging.basicConfig(
@@ -23,7 +24,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
+TIME_SLEEP = 600
 
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
@@ -32,31 +33,18 @@ HOMEWORK_VERDICTS = {
 }
 
 
-class EnvironmentNotFound(Exception):
-    """Исключение возникающее при нехватки переменных окружения."""
-
-    pass
-
-
-class AnswerAPIError(Exception):
-    """Исключение возникающее при ошибочных ответах от API."""
-
-    pass
-
-
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    message = ("Отсутствует обязательная переменная окружения: "
-               "'{}' Программа принудительно остановлена.")
+    message = (
+        'Отсутствует обязательная переменная окружения: '
+        '"{}" Программа принудительно остановлена.'
+    )
     if not PRACTICUM_TOKEN:
-        logging.critical(message.format("PRACTICUM_TOKEN"))
-        raise EnvironmentNotFound(message.format("PRACTICUM_TOKEN"))
-    elif not TELEGRAM_TOKEN:
-        logging.critical(message.format("TELEGRAM_TOKEN"))
-        raise EnvironmentNotFound(message.format("TELEGRAM_TOKEN"))
-    elif not TELEGRAM_CHAT_ID:
-        logging.critical(message.format("TELEGRAM_CHAT_ID"))
-        raise EnvironmentNotFound(message.format("TELEGRAM_CHAT_ID"))
+        raise EnvironmentNotFound(message.format('PRACTICUM_TOKEN'))
+    if not TELEGRAM_TOKEN:
+        raise EnvironmentNotFound(message.format('TELEGRAM_TOKEN'))
+    if not TELEGRAM_CHAT_ID:
+        raise EnvironmentNotFound(message.format('TELEGRAM_CHAT_ID'))
 
 
 def send_message(bot, message):
@@ -66,10 +54,10 @@ def send_message(bot, message):
             chat_id=TELEGRAM_CHAT_ID,
             text=message
         )
-        logging.debug("Сообщение отправлено в чат Telegram")
+        logging.debug('Сообщение отправлено в чат Telegram')
     except Exception as error:
-        message = f"Сбой при отправке сообщения: {error}"
-        logging.error(message)
+        logging.error('Сообщение отправлено в чат Telegram')
+        raise MessageSend(f'Сбой при отправке сообщения: {error}')
 
 
 def get_api_answer(timestamp):
@@ -82,65 +70,51 @@ def get_api_answer(timestamp):
             params=payload
         )
     except Exception as error:
-        logging.error(
-            f"Сбой в работе программы: Эндпоинт {ENDPOINT} недоступен. "
-            f"Код ответа API: {error}"
+        raise AnswerAPIError(
+            f'Сбой в работе программы: Эндпоинт {ENDPOINT} недоступен. '
+            f'Код ответа API: {error}'
         )
-        homework_statuses = None
-    if homework_statuses.status_code == HTTPStatus.BAD_REQUEST:
-        error = homework_statuses.json()['error']['error']
-        logging.error(
-            f"Сбой в работе программы: "
-            f"Эндпоинт {ENDPOINT} сообщил об ошибке: {error}."
-        )
-        homework_statuses = None
-    elif homework_statuses.status_code == HTTPStatus.UNAUTHORIZED:
-        message = homework_statuses.json()['message']
-        logging.error(
-            f"Сбой в работе программы: "
-            f"Эндпоинт {ENDPOINT} сообщил об ошибке: {message}."
-        )
-        homework_statuses = None
-    elif homework_statuses.status_code != HTTPStatus.OK:
-        error = homework_statuses.status_code()
-        logging.error(
-            f"Сбой в работе программы: "
-            f"Эндпоинт {ENDPOINT} сообщил об ошибке: Код ответа API: {error}."
-        )
-        homework_statuses = None
 
-    return homework_statuses.json()
+    if (homework_statuses.status_code == HTTPStatus.BAD_REQUEST
+       or homework_statuses.status_code == HTTPStatus.UNAUTHORIZED
+       or homework_statuses.status_code != HTTPStatus.OK):
+        error = homework_statuses.json()['error']['error']
+        raise AnswerAPIError(
+            f'Сбой в работе программы: '
+            f'Эндпоинт {ENDPOINT} сообщил об ошибке: {error}.'
+        )
+
+    try:
+        return homework_statuses.json()
+    except Exception as error:
+        raise AnswerAPIError(
+            f'Сбой в работе программы: '
+            f'Эндпоинт {ENDPOINT} вернул некорректный json: {error}.'
+        )
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
-    keys = ['homeworks', 'current_date']
     if not isinstance(response, dict):
-        message = "Неверный формат ответа API."
-        raise TypeError(message)
-    for key in response.keys():
-        if key not in keys:
-            message = (f"Неожиданный ключ в ответе: "
-                       f"Эндпоинт {ENDPOINT}. Ключ в ответе: {key}")
-            raise AnswerAPIError(message)
+        raise TypeError('Неверный формат ответа API.')
+
     if 'homeworks' not in response.keys():
-        message = "Ответ не содержит информации о домашней работе."
-        raise AnswerAPIError(message)
+        raise AnswerAPIError('Ответ не содержит информации о домашней работе.')
+
     if not isinstance(response['homeworks'], list):
-        message = "Неверный формат ответа для 'homeworks'."
-        raise TypeError(message)
+        raise TypeError('Неверный формат ответа для "homeworks".')
 
 
 def parse_status(homework):
     """Извлекает статус этой домашней работы."""
-    if "homework_name" not in homework.keys():
-        raise KeyError("В ответе API домашки нет ключа 'homework_name'.")
-    if "status" not in homework.keys():
-        raise KeyError("В ответе API домашки нет ключа 'status'.")
+    if 'homework_name' not in homework:
+        raise KeyError('В ответе API домашки нет ключа "homework_name".')
+    if 'status' not in homework:
+        raise KeyError('В ответе API домашки нет ключа "status".')
     if homework['status'] not in HOMEWORK_VERDICTS:
         raise KeyError(
-            f"В ответе API домашки указан незвестный статус проверки. "
-            f"{homework['status']}"
+            f'В ответе API домашки указан незвестный статус проверки. '
+            f'{homework["status"]}'
         )
     homework_name = homework['homework_name']
     verdict = HOMEWORK_VERDICTS[homework['status']]
@@ -149,23 +123,27 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    check_tokens()
+    try:
+        check_tokens()
+    except Exception as error:
+        logging.critical(error)
+        os._exit(1)
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
 
     while True:
-        answer = get_api_answer(timestamp)
         try:
+            answer = get_api_answer(timestamp)
             check_response(answer)
             message = parse_status(answer['homeworks'][0])
             send_message(bot, message)
 
         except Exception as error:
-            message = f"Сбой в работе программы: {error}"
+            message = f'Сбой в работе программы: {error}'
             logging.error(message)
             send_message(bot, message)
-        time.sleep(600)
+        time.sleep(TIME_SLEEP)
 
 
 if __name__ == '__main__':
