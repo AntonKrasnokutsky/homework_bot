@@ -139,7 +139,7 @@ def main():
             timestamp = int(time.time())
         except MessageSend as error:
             logging.error(error)
-        except IndexError as error:
+        except IndexError:
             logging.debug('Нет новых статусов домашки')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
