@@ -75,12 +75,10 @@ def get_api_answer(timestamp):
             f'Код ответа API: {error}'
         )
 
-    if (homework_statuses.status_code == HTTPStatus.BAD_REQUEST
-       or homework_statuses.status_code == HTTPStatus.UNAUTHORIZED
-       or homework_statuses.status_code != HTTPStatus.OK):
+    if homework_statuses.status_code != HTTPStatus.OK:
         error = homework_statuses.json()['error']['error']
         raise AnswerAPIError(
-            f'Сбой в работе программы: '
+            'Сбой в работе программы: '
             f'Эндпоинт {ENDPOINT} сообщил об ошибке: {error}.'
         )
 
@@ -88,7 +86,7 @@ def get_api_answer(timestamp):
         return homework_statuses.json()
     except Exception as error:
         raise AnswerAPIError(
-            f'Сбой в работе программы: '
+            'Сбой в работе программы: '
             f'Эндпоинт {ENDPOINT} вернул некорректный json: {error}.'
         )
 
@@ -113,7 +111,7 @@ def parse_status(homework):
         raise KeyError('В ответе API домашки нет ключа "status".')
     if homework['status'] not in HOMEWORK_VERDICTS:
         raise KeyError(
-            f'В ответе API домашки указан незвестный статус проверки. '
+            'В ответе API домашки указан незвестный статус проверки. '
             f'{homework["status"]}'
         )
     homework_name = homework['homework_name']
@@ -125,21 +123,24 @@ def main():
     """Основная логика работы бота."""
     try:
         check_tokens()
-    except Exception as error:
+    except EnvironmentNotFound as error:
         logging.critical(error)
-        raise EnvironmentNotFound(error)
+        os.exit(1)
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+    timestamp = 0 # int(time.time())
 
     while True:
         try:
             answer = get_api_answer(timestamp)
             check_response(answer)
-            print(answer)
             message = parse_status(answer['homeworks'][0])
             send_message(bot, message)
-
+            timestamp = int(time.time())
+        except MessageSend as error:
+            logging.error(error)
+        except IndexError as error:
+            logging.debug('Нет новых статусов домашки')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.error(message)
