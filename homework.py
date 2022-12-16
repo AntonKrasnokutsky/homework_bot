@@ -128,7 +128,7 @@ def main():
         os.exit(1)
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = 0 # int(time.time())
+    timestamp = int(time.time())
 
     while True:
         try:
